@@ -235,7 +235,7 @@ class SubmitModal(Modal, title="Submit a Question"):
             return
 
         # Prepare message
-        notify_msg = f"🧠 @{self.user.name}#{self.user.discriminator} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
+        notify_msg = f"🧠 @{display_name} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
 
         # Find all admins/moderators by checking guild permissions
         for member in guild.members:
