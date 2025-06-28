@@ -285,10 +285,10 @@ class CategorySelect(Select):
             for i,e in enumerate(slice,start+1):
                 if cat=="All":
                     uid,ins,con,tot=e
-                    lines.append(f"{i}. <@{uid}> — {ins} 🧠 / {con} 💡 — {get_rank(tot)}")
+                    lines.append(f"{i}. <@{uid}> — {ins} ⭐ / {con} 💡 — {get_rank(tot)}")
                 else:
                     uid,pt=e
-                    em="🧠" if cat=="Insight" else "💡"
+                    em="⭐" if cat=="Insight" else "💡"
                     lines.append(f"{i}. <@{uid}> — {pt} {em} — {get_rank(pt)}")
             desc="\n".join(lines)
 
