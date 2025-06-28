@@ -237,11 +237,11 @@ class SubmitModal(Modal, title="Submit a Question"):
 
         # Then send to admins/mods DMs
         for member in guild.members:
-        if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
-        try:
-            await member.send(notify_msg)
-        except Exception as e:
-            print(f"Could not DM {member}: {e}")
+            if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
+                try:
+                    await member.send(notify_msg)
+                except Exception as e:
+                    print(f"Could not DM {member}: {e}")
 
 @tree.command(name="submitquestion", description="Submit a question")
 async def submit_question(interaction):
