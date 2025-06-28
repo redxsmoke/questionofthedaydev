@@ -159,8 +159,9 @@ async def on_message(msg):
 async def question_commands(interaction):
     await interaction.response.send_message(
         "Commands:\n"
-        "/submitquestion\n/removequestion\n/questionlist\n/score\n/leaderboard\n/ranks\n\n"
-        "Admin-only:\n"
+        "/submitquestion\n/score\n/leaderboard\n/ranks\n\n"
+        "ADMIN ONLY COMMANDS:\n"
+        "/removequestion\n/questionlist\n"
         "/addinsightpoints\n/addcontributorpoints\n/removeinsightpoints\n/removecontributorpoints",
         ephemeral=True
     )
