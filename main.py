@@ -137,12 +137,20 @@ async def on_ready():
     print("✅ Discord bot connected")
     await tree.sync()
     purge_channel_before_post.start()
+    notify_upcoming_question.start()
     post_daily_message.start()
 
-@tasks.loop(time=time(hour=11, minute=59))
+@tasks.loop(seconds=30)
 async def purge_channel_before_post():
     ch = client.get_channel(CHANNEL_ID)
     await ch.purge(limit=1000)
+
+@tasks.loop(time=time(hour=11, minute=50))
+async def notify_upcoming_question():
+    ch_id = int(os.getenv("DISCORD_CHANNEL_ID") or 0)
+    channel = client.get_channel(ch_id)
+    if channel:
+        await channel.send("⏳ The next question will be posted soon! Submit your own question by using the /submitquestion command")
 
 @tasks.loop(time=time(hour=12, minute=0))
 async def post_daily_message():
