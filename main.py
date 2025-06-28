@@ -142,7 +142,7 @@ async def purge_channel_before_post():
     ch = client.get_channel(CHANNEL_ID)
     await ch.purge(limit=1000)
 
-@tasks.loop(seconds=30)
+@tasks.loop(time=time(hour=12, minute=0))
 async def post_daily_message():
     await post_question()
 
