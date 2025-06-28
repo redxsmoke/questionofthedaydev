@@ -218,7 +218,7 @@ class SubmitModal(Modal, title="Submit a Question"):
         sc = load_scores()
         uid = str(self.user.id)
         today = str(datetime.date.today())
-        sc.setdefault(uid, {"insight_points":0,"contribution_points":0,"answered":[], "last_contrib":None})
+        sc.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": [], "last_contrib": None})
         if sc[uid]["last_contrib"] != today:
             sc[uid]["contribution_points"] += 1
             sc[uid]["last_contrib"] = today
@@ -226,6 +226,25 @@ class SubmitModal(Modal, title="Submit a Question"):
             await inter.response.send_message(f"✅ Submitted! ID `{nid}` +1 contribution point", ephemeral=True)
         else:
             await inter.response.send_message(f"✅ Submitted! ID `{nid}` (already got today's point)", ephemeral=True)
+
+        # --- Notify admins/mods here ---
+        # Fetch guild from interaction
+        guild = inter.guild
+        if guild is None:
+            # If no guild context (e.g., DM?), skip notification
+            return
+
+        # Prepare message
+        notify_msg = f"🧠 @{self.user.name}#{self.user.discriminator} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
+
+        # Find all admins/moderators by checking guild permissions
+        for member in guild.members:
+            if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
+                try:
+                    await member.send(notify_msg)
+                except Exception as e:
+                    # Could not send DM, ignore or log
+                    print(f"Could not DM {member}: {e}")
 
 @tree.command(name="submitquestion", description="Submit a question")
 async def submit_question(interaction):
