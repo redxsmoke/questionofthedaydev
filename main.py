@@ -191,7 +191,7 @@ For scores between 76 and 99 points.
 🍣 **Master Sushi Chef**  
 For scores of 100 points and above.
 """
-    await interaction.response.send_message(ranks_description, ephemeral=True)
+    await interaction.response.send_message(ranks_description, ephemeral=False)
 
 class SubmitModal(Modal, title="Submit a Question"):
     q = TextInput(label="Your question", style=discord.TextStyle.paragraph, max_length=500)
@@ -251,7 +251,7 @@ async def score(interaction):
     tot = sc["insight_points"]+sc["contribution_points"]
     await interaction.response.send_message(
         f"⭐ {sc['insight_points']} | 💡 {sc['contribution_points']} | 🏆 {get_rank(tot)}",
-        ephemeral=True
+        ephemeral=False
     )
 
 # ------- LEADERBOARD with category select and pagination -------
