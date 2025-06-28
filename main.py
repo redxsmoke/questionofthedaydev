@@ -230,21 +230,18 @@ class SubmitModal(Modal, title="Submit a Question"):
         # --- Notify admins/mods here ---
         # Fetch guild from interaction
         guild = inter.guild
-        if guild is None:
-            # If no guild context (e.g., DM?), skip notification
-            return
+        member = guild.get_member(self.user.id) if guild else None
+        display_name = member.display_name if member else f"{self.user.name}#{self.user.discriminator}"
 
-        # Prepare message
         notify_msg = f"🧠 @{display_name} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
 
-        # Find all admins/moderators by checking guild permissions
+        # Then send to admins/mods DMs
         for member in guild.members:
-            if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
-                try:
-                    await member.send(notify_msg)
-                except Exception as e:
-                    # Could not send DM, ignore or log
-                    print(f"Could not DM {member}: {e}")
+        if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
+        try:
+            await member.send(notify_msg)
+        except Exception as e:
+            print(f"Could not DM {member}: {e}")
 
 @tree.command(name="submitquestion", description="Submit a question")
 async def submit_question(interaction):
