@@ -83,11 +83,11 @@ async def post_question():
             super().__init__(timeout=None)
             self.qid = qid
 
-        @discord.ui.button(label="Answer Freely ⭐", style=discord.ButtonStyle.primary)
+        @discord.ui.button(label="Answer Freely ⭐ (+1 Insight Point)", style=discord.ButtonStyle.primary)
         async def freely(self, interaction, button):
             await interaction.response.send_modal(AnswerModal(self.qid, interaction.user))
 
-        @discord.ui.button(label="Answer Anonymously 🔒", style=discord.ButtonStyle.secondary)
+        @discord.ui.button(label="Answer Anonymously 🔒 (0 Insight Points)", style=discord.ButtonStyle.secondary)
         async def anon(self, interaction, button):
             await interaction.response.send_modal(AnonModal(self.qid, interaction.user))
 
