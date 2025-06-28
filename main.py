@@ -140,12 +140,12 @@ async def on_ready():
     notify_upcoming_question.start()
     post_daily_message.start()
 
-@tasks.loop(seconds=30)
+@tasks.loop(time=time(hour=11, minute=45))
 async def purge_channel_before_post():
     ch = client.get_channel(CHANNEL_ID)
     await ch.purge(limit=1000)
 
-@tasks.loop(time=time(hour=11, minute=50))
+@tasks.loop(seconds=30)
 async def notify_upcoming_question():
     ch_id = int(os.getenv("DISCORD_CHANNEL_ID") or 0)
     channel = client.get_channel(ch_id)
