@@ -59,8 +59,10 @@ def get_rank(total):
         return "🍣 Sashimi Scholar"
     elif total <= 75:
         return "🌶️ Wasabi Wizard"
-    else:
+    elif total <= 99:
         return "🍱 Sushi Sensei"
+    else:
+        return "🍣 Master Sushi Chef"
 
 def is_admin(interaction: discord.Interaction) -> bool:
     return interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_messages
@@ -166,17 +168,30 @@ async def question_commands(interaction):
         ephemeral=True
     )
 
-@tree.command(name="ranks", description="View sushi ranks")
-async def ranks(interaction):
-    await interaction.response.send_message(
-        "🏆 Ranks:\n"
-        "🍚 0–10 Rice Rookie\n"
-        "🥢 11–25 Miso Mind\n"
-        "🍣 26–40 Sashimi Scholar\n"
-        "🌶️ 41–75 Wasabi Wizard\n"
-        "🍱 76+ Sushi Sensei",
-        ephemeral=True
-    )
+@tree.command(name="ranks", description="View sushi ranks and point ranges")
+async def ranks(interaction: discord.Interaction):
+    ranks_description = """
+**Sushi Rank Tiers — Based on Total Points (⭐ + 💡):**
+
+🍚 **Rice Rookie**  
+For scores between 0 and 10 points.
+
+🥢 **Miso Mind**  
+For scores between 11 and 25 points.
+
+🍣 **Sashimi Scholar**  
+For scores between 26 and 40 points.
+
+🌶️ **Wasabi Wizard**  
+For scores between 41 and 75 points.
+
+🍱 **Sushi Sensei**  
+For scores between 76 and 99 points.
+
+🍣 **Master Sushi Chef**  
+For scores of 100 points and above.
+"""
+    await interaction.response.send_message(ranks_description, ephemeral=True)
 
 class SubmitModal(Modal, title="Submit a Question"):
     q = TextInput(label="Your question", style=discord.TextStyle.paragraph, max_length=500)
