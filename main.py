@@ -561,5 +561,97 @@ async def remove_contrib(interaction, user: discord.Member, amount: int):
     sc.setdefault(uid,{"insight_points":0,"contribution_points":0,"answered":[]})
     sc[uid]["contribution_points"]=max(0,sc[uid]["contribution_points"]-amount); save_scores(sc)
     await interaction.response.send_message(f"✅ -{amount} contribution from {user.mention}",ephemeral=False)
+@tree.command(name="start_test_sequence", description="Admin only: Run full test sequence for question flow")
+async def start_test_sequence(interaction: discord.Interaction):
+    if not is_admin(interaction):
+        return await interaction.response.send_message("❌ No permission.", ephemeral=True)
+
+    channel = client.get_channel(CHANNEL_ID)
+    if channel is None:
+        return await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
+
+    global submission_open, voting_message, answer_log
+
+    # Reset state for test
+    submission_open = True
+    voting_message = None
+    answer_log = {}
+
+    await interaction.response.send_message("🚦 Starting full test sequence...", ephemeral=False)
+
+    # 1. Purge channel
+    await channel.purge(limit=1000)
+    await channel.send("🧹 Channel purged for test.")
+
+    # 2. Notify upcoming question
+    await channel.send("⏳ The next question will be posted soon!")
+
+    # 3. Post the question (same as your post_daily_message logic)
+    await post_question()
+
+    # Allow time for user answers (simulate delay or manual answering)
+    await channel.send("You can now answer freely or anonymously using the buttons.")
+
+    # (For testing purposes, you or others can answer now manually.)
+
+    # 4. Send submission closing warning
+    await channel.send("⏳ Submissions will close in 10 minutes! Get your answers in quickly!")
+
+    # 5. Close submissions
+    submission_open = False
+    await channel.send("🚫 Submissions are now closed for today's question. Thank you!")
+
+    # 6. Start voting with submitted answers
+    # Filter non-anonymous answers for voting
+    answers = [(uid, data["answer"]) for uid, data in answer_log.items() if not data["anonymous"]]
+    if not answers:
+        await channel.send("⚠️ No answers submitted to vote on.")
+        return
+
+    view = VotingView(answers)
+    content_lines = [f"Vote for the best answer!"]
+    for idx, (uid, ans) in enumerate(answers, start=1):
+        content_lines.append(f"**Answer #{idx}:** {ans}")
+    content = "\n".join(content_lines)
+    voting_message = await channel.send(content, view=view)
+
+    await channel.send("🗳️ Voting started! Click buttons to vote.")
+
+    # Note: For testing, you can now vote manually by clicking buttons
+
+    # 7. Wait for a short delay before ending voting (simulate voting period)
+    await asyncio.sleep(15)  # adjust as needed for test speed
+
+    # 8. End voting - tally votes and announce winner(s)
+    if voting_message and voting_message.view:
+        # Disable buttons
+        for child in voting_message.view.children:
+            child.disabled = True
+        await voting_message.edit(view=voting_message.view)
+
+        vote_counts = voting_message.view.vote_counts
+        if not vote_counts:
+            await channel.send("⚠️ No votes were cast today.")
+            return
+
+        max_votes = max(vote_counts.values())
+        winners = [uid for uid, count in vote_counts.items() if count == max_votes]
+
+        if max_votes == 0:
+            await channel.send("No votes received today.")
+            return
+
+        scores = load_scores()
+        for winner_uid in winners:
+            uid = str(winner_uid)
+            scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
+            scores[uid]["insight_points"] += 1
+        save_scores(scores)
+
+        winner_mentions = ", ".join(f"<@{uid}>" for uid in winners)
+        await channel.send(f"🏆 Voting ended! Congratulations to the winner(s): {winner_mentions} with {max_votes} vote(s)! +1 insight point awarded.")
+    else:
+        await channel.send("⚠️ Voting message missing or no votes to tally.")
+
 
 client.run(TOKEN)
