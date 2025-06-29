@@ -454,22 +454,20 @@ class QuestionListView(View):
         end = start + self.per_page
         current = self.questions[start:end]
 
-current = self.questions[start:end]
-
-embed = discord.Embed(
-    title="📋 Question List",
-    description="\n".join(
-        f"`{q['id']}`: {q['question']} — submitted by <@{q['submitter']}>" if q.get("submitter") else f"`{q['id']}`: {q['question']}"
-        for q in current
-    ),
-    color=discord.Color.blue()
-)
-
+        embed = discord.Embed(
+            title="📋 Question List",
+            description="\n".join(
+                f"`{q['id']}`: {q['question']} — submitted by <@{q['submitter']}>" if q.get("submitter") else f"`{q['id']}`: {q['question']}"
+                for q in current
+            ),
+            color=discord.Color.blue()
+        )
 
         embed.set_footer(text=f"Page {self.page + 1} of {self.max_page + 1}")
 
         self.update_buttons()
         await interaction.response.edit_message(embed=embed, view=self)
+
 
 @tree.command(name="questionlist", description="Admin-only: list questions")
 async def question_list(interaction: discord.Interaction):
