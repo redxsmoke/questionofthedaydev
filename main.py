@@ -258,7 +258,7 @@ async def start_voting():
     # Prepare answers for voting: only non-anonymous answers
     answers = [(uid, data["answer"]) for uid, data in answer_log.items() if not data["anonymous"]]
     if not answers:
-        await channel.send("⚠️ No answers were submitted for voting today.")
+        await channel.send("⚠️ No answers were submitted for voting today. Note - anonymous answers are not eligible to be voted on")
         return
 
     view = VotingView(answers)
@@ -614,7 +614,7 @@ async def start_test_sequence(interaction: discord.Interaction):
             answers.append((uid, display_name, data["answer"]))
 
     if not answers:
-        await channel.send("⚠️ No answers submitted to vote on.")
+        await channel.send("⚠️ No answers submitted to vote on. Note - anonymous answers are not eligible for voting")
         return
 
     voting_view = VotingView(answers)  # Save VotingView instance to global
