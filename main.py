@@ -11,15 +11,17 @@ import asyncio
 
 # --- Add VotingView and VoteButton classes here ---
 
+# Update VotingView and VoteButton to accept display_name:
+
 class VotingView(View):
-    def __init__(self, answers):
+    def __init__(self, answers):  # answers: list of (uid, display_name, answer)
         super().__init__(timeout=None)
         self.answers = answers
-        self.vote_counts = {uid: 0 for uid, _ in answers}
+        self.vote_counts = {uid: 0 for uid, _, _ in answers}
         self.user_votes = {}
 
-        for idx, (uid, answer) in enumerate(answers):
-            label = f"Vote for answer #{idx+1}"
+        for idx, (uid, display_name, _) in enumerate(answers):
+            label = f"Vote for answer #{idx+1} ({display_name})"
             self.add_item(VoteButton(label=label, uid=uid, parent=self))
 
 class VoteButton(Button):
@@ -32,30 +34,25 @@ class VoteButton(Button):
         user_id = interaction.user.id
         parent = self.parent
 
-        # Check if user already voted
         if user_id in parent.user_votes:
             previous_vote = parent.user_votes[user_id]
             if previous_vote == self.uid:
-                await interaction.response.send_message("You have already voted for this answer.", ephemeral=True)
+                await interaction.response.send_message("You already voted for this answer.", ephemeral=True)
                 return
             else:
-                # Remove previous vote count
                 parent.vote_counts[previous_vote] -= 1
 
-        # Register new vote
         parent.user_votes[user_id] = self.uid
         parent.vote_counts[self.uid] += 1
 
-        # Prepare vote counts display
         desc_lines = []
-        for idx, (uid, answer) in enumerate(parent.answers, start=1):
+        for idx, (uid, display_name, answer) in enumerate(parent.answers, start=1):
             count = parent.vote_counts.get(uid, 0)
-            desc_lines.append(f"Answer #{idx}: {answer} — {count} vote{'s' if count != 1 else ''}")
+            desc_lines.append(f"Answer #{idx} ({display_name}): {answer} — {count} vote{'s' if count != 1 else ''}")
 
         vote_summary = "\n".join(desc_lines)
-
-        # Update the message with the current vote counts
         await interaction.response.edit_message(content=f"Current votes:\n{vote_summary}", view=parent)
+
 
 logging.basicConfig(level=logging.INFO)
 print("💡 main.py is running")
@@ -65,6 +62,7 @@ if not TOKEN:
     raise RuntimeError("❌ DISCORD_BOT_TOKEN not set!")
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 ADMIN_CHANNEL_ID = int(os.getenv('DISCORD_ADMIN_CHANNEL_ID', CHANNEL_ID))
+GUILD_ID = int(os.getenv('GUILD_ID'))
 
 QUESTIONS_FILE = 'questions.json'
 SCORES_FILE = 'user_scores.json'
@@ -280,7 +278,7 @@ async def end_voting():
 
     channel = client.get_channel(CHANNEL_ID)
 
-    # Disable buttons on the message (to stop voting)
+    # Disable voting buttons so no more votes can be cast
     view = voting_message.view
     if view:
         for child in view.children:
@@ -288,19 +286,13 @@ async def end_voting():
         await voting_message.edit(view=view)
 
     # Tally votes
-    if not hasattr(voting_message, 'view') or voting_message.view is None:
-        # Defensive fallback: re-create or skip
-        await channel.send("⚠️ Could not tally votes — no view found.")
-        return
-
-    # Use the stored vote counts from VotingView
-    vote_counts = voting_message.view.vote_counts
-
+    vote_counts = voting_message.view.vote_counts if voting_message.view else None
     if not vote_counts:
         await channel.send("⚠️ No votes were cast today.")
         voting_message = None
         return
 
+    # Your "after voting ends" code goes here:
     max_votes = max(vote_counts.values())
     winners = [uid for uid, count in vote_counts.items() if count == max_votes]
 
@@ -309,20 +301,32 @@ async def end_voting():
         voting_message = None
         return
 
-    # Award 1 insight point to each winner
+    # Award points to winners and send congrats message
     scores = load_scores()
     for winner_uid in winners:
         uid = str(winner_uid)
         scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
         scores[uid]["insight_points"] += 1
-
     save_scores(scores)
 
-    winner_mentions = ", ".join(f"<@{uid}>" for uid in winners)
-    await channel.send(f"🏆 Voting ended! Congratulations to the winner(s): {winner_mentions} with {max_votes} vote(s)! +1 insight point awarded.")
+    winner_mentions = [f"<@{uid}>" for uid in winners]
+    if len(winner_mentions) == 1:
+        msg = (
+            f"🏆 Congratulations {winner_mentions[0]} - you had the most liked answer for today's Question of the Day! "
+            f"As a reward, an ⭐ Insight point has been added to your score."
+        )
+    else:
+        winners_str = " & ".join(winner_mentions)
+        msg = (
+            f"🏆 Congratulations {winners_str} - you had the most liked answers for today's Question of the Day! "
+            f"As a reward, an ⭐ Insight point has been added to your scores."
+        )
+
+    await channel.send(msg)
 
     # Reset voting state
     voting_message = None
+
 
 @client.event
 async def on_message(msg):
@@ -600,19 +604,28 @@ async def start_test_sequence(interaction: discord.Interaction):
     await asyncio.sleep(10)
 
     # Prepare answers for voting
-    answers = [(uid, data["answer"]) for uid, data in answer_log.items() if not data["anonymous"]]
-    if not answers:
-        await channel.send("⚠️ No answers submitted to vote on.")
-        return
+guild = client.get_guild(GUILD_ID)
+answers = []
+for uid, data in answer_log.items():
+    if not data["anonymous"]:
+        member = guild.get_member(int(uid))
+        display_name = member.display_name if member else f"User {uid}"
+        answers.append((uid, display_name, data["answer"]))
 
-    view = VotingView(answers)
-    content_lines = ["Vote for the best answer!"]
-    for idx, (uid, ans) in enumerate(answers, start=1):
-        content_lines.append(f"**Answer #{idx}:** {ans}")
-    content = "\n".join(content_lines)
+if not answers:
+    await channel.send("⚠️ No answers submitted to vote on.")
+    return
 
-    voting_message = await channel.send(content, view=view)
-    await channel.send("🗳️ Voting started! Click buttons to vote.")
+view = VotingView(answers)
+
+content_lines = ["Vote for the best answer!"]
+for idx, (uid, display_name, ans) in enumerate(answers, start=1):
+    content_lines.append(f"Answer #{idx} - submitted by <@{uid}>: \"{ans}\"")
+
+content = "\n".join(content_lines)
+voting_message = await channel.send(content, view=view)
+await channel.send("🗳️ Voting started! Click buttons to vote.")
+
     await asyncio.sleep(15)  # Let voting go on for 15 seconds
 
     if voting_message and voting_message.view:
@@ -639,8 +652,25 @@ async def start_test_sequence(interaction: discord.Interaction):
             scores[uid]["insight_points"] += 1
         save_scores(scores)
 
-        winner_mentions = ", ".join(f"<@{uid}>" for uid in winners)
-        await channel.send(f"🏆 Voting ended! Congratulations to the winner(s): {winner_mentions} with {max_votes} vote(s)! +1 insight point awarded.")
+        guild = client.get_guild(GUILD_ID)
+winner_names = []
+for uid in winners:
+    member = guild.get_member(int(uid))
+    winner_names.append(f"@{member.display_name}" if member else f"User {uid}")
+
+if len(winner_names) == 1:
+    msg = (
+        f"🏆 Congratulations {winner_names[0]} - you had the most liked answer for today's Question of the Day! "
+        f"As a reward, an ⭐ Insight point has been added to your score."
+    )
+else:
+    winners_str = " & ".join(winner_names)
+    msg = (
+        f"🏆 Congratulations {winners_str} - you had the most liked answers for today's Question of the Day! "
+        f"As a reward, an ⭐ Insight point has been added to your scores."
+    )
+
+await channel.send(msg)
     else:
         await channel.send("⚠️ Voting message missing or no votes to tally.")
 
