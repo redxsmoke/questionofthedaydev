@@ -34,6 +34,10 @@ class VoteButton(Button):
         user_id = interaction.user.id
         parent = self.parent
 
+        if user_id == self.uid:
+            await interaction.response.send_message("❌ You cannot vote for your own answer.", ephemeral=True)
+            return
+
         if user_id in parent.user_votes:
             previous_vote = parent.user_votes[user_id]
             if previous_vote == self.uid:
