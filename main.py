@@ -626,52 +626,53 @@ content = "\n".join(content_lines)
 voting_message = await channel.send(content, view=view)
 await channel.send("🗳️ Voting started! Click buttons to vote.")
 
-    await asyncio.sleep(15)  # Let voting go on for 15 seconds
+await asyncio.sleep(15)  # Let voting go on for 15 seconds
 
-    if voting_message and voting_message.view:
-        for child in voting_message.view.children:
-            child.disabled = True
-        await voting_message.edit(view=voting_message.view)
+if voting_message and voting_message.view:
+    for child in voting_message.view.children:
+        child.disabled = True
+    await voting_message.edit(view=voting_message.view)
 
-        vote_counts = voting_message.view.vote_counts
-        if not vote_counts:
-            await channel.send("⚠️ No votes were cast today.")
-            return
+    vote_counts = voting_message.view.vote_counts
+    if not vote_counts:
+        await channel.send("⚠️ No votes were cast today.")
+        return
 
-        max_votes = max(vote_counts.values())
-        winners = [uid for uid, count in vote_counts.items() if count == max_votes]
+    max_votes = max(vote_counts.values())
+    winners = [uid for uid, count in vote_counts.items() if count == max_votes]
 
-        if max_votes == 0:
-            await channel.send("No votes received today.")
-            return
+    if max_votes == 0:
+        await channel.send("No votes received today.")
+        return
 
-        scores = load_scores()
-        for winner_uid in winners:
-            uid = str(winner_uid)
-            scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
-            scores[uid]["insight_points"] += 1
-        save_scores(scores)
+    scores = load_scores()
+    for winner_uid in winners:
+        uid = str(winner_uid)
+        scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
+        scores[uid]["insight_points"] += 1
+    save_scores(scores)
 
-        guild = client.get_guild(GUILD_ID)
-winner_names = []
-for uid in winners:
-    member = guild.get_member(int(uid))
-    winner_names.append(f"@{member.display_name}" if member else f"User {uid}")
+    guild = client.get_guild(GUILD_ID)
+    winner_names = []
+    for uid in winners:
+        member = guild.get_member(int(uid))
+        winner_names.append(f"@{member.display_name}" if member else f"User {uid}")
 
-if len(winner_names) == 1:
-    msg = (
-        f"🏆 Congratulations {winner_names[0]} - you had the most liked answer for today's Question of the Day! "
-        f"As a reward, an ⭐ Insight point has been added to your score."
-    )
-else:
-    winners_str = " & ".join(winner_names)
-    msg = (
-        f"🏆 Congratulations {winners_str} - you had the most liked answers for today's Question of the Day! "
-        f"As a reward, an ⭐ Insight point has been added to your scores."
-    )
-
-await channel.send(msg)
+    if len(winner_names) == 1:
+        msg = (
+            f"🏆 Congratulations {winner_names[0]} - you had the most liked answer for today's Question of the Day! "
+            f"As a reward, an ⭐ Insight point has been added to your score."
+        )
     else:
-        await channel.send("⚠️ Voting message missing or no votes to tally.")
+        winners_str = " & ".join(winner_names)
+        msg = (
+            f"🏆 Congratulations {winners_str} - you had the most liked answers for today's Question of the Day! "
+            f"As a reward, an ⭐ Insight point has been added to your scores."
+        )
+
+    await channel.send(msg)
+else:
+    await channel.send("⚠️ Voting message missing or no votes to tally.")
+
 
 client.run(TOKEN)
