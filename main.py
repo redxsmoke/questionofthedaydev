@@ -655,7 +655,7 @@ async def start_test_sequence(interaction: discord.Interaction):
     await asyncio.sleep(5)
 
     await post_question()
-    await asyncio.sleep(10)
+    await asyncio.sleep(3)
 
     await channel.send("You can now answer freely or anonymously using the buttons.")
     await asyncio.sleep(15)
