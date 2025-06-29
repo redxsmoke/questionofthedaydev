@@ -420,6 +420,9 @@ class SubmitModal(Modal, title="Submit a Question"):
 async def submit_question(interaction):
     await interaction.response.send_modal(SubmitModal(interaction.user))
 
+from discord.ui import View, Button
+import discord
+
 class QuestionListView(View):
     def __init__(self, questions, page=0):
         super().__init__(timeout=180)
@@ -467,7 +470,6 @@ class QuestionListView(View):
 
         self.update_buttons()
         await interaction.response.edit_message(embed=embed, view=self)
-
 
 @tree.command(name="questionlist", description="Admin-only: list questions")
 async def question_list(interaction: discord.Interaction):
