@@ -214,6 +214,9 @@ async def on_ready():
     post_daily_message.start()
     submission_warning.start() 
     close_submissions.start()
+    start_voting.start()
+    end_voting.start()
+    
 
 @tasks.loop(time=time(hour=11, minute=50))
 async def purge_channel_before_post():
@@ -242,7 +245,83 @@ async def close_submissions():
     submission_open = False
     channel = client.get_channel(CHANNEL_ID)
     await channel.send("🚫 Submissions are now closed for today's question. Thank you!")
+@tasks.loop(time=time(hour=17, minute=5))
+async def start_voting():
+    global voting_message, submission_open
 
+    # Make sure submissions are closed
+    if submission_open:
+        return  # Don’t start voting if submissions are still open
+
+    channel = client.get_channel(CHANNEL_ID)
+
+    # Prepare answers for voting: only non-anonymous answers
+    answers = [(uid, data["answer"]) for uid, data in answer_log.items() if not data["anonymous"]]
+    if not answers:
+        await channel.send("⚠️ No answers were submitted for voting today.")
+        return
+
+    view = VotingView(answers)
+    content_lines = [f"Vote for the best answer!"]
+
+    for idx, (uid, ans) in enumerate(answers, start=1):
+        content_lines.append(f"**Answer #{idx}:** {ans}")
+
+    content = "\n".join(content_lines)
+    voting_message = await channel.send(content, view=view)
+
+@tasks.loop(time=time(hour=18, minute=10))
+async def end_voting():
+    global voting_message
+
+    if not voting_message:
+        return  # No voting message found
+
+    channel = client.get_channel(CHANNEL_ID)
+
+    # Disable buttons on the message (to stop voting)
+    view = voting_message.view
+    if view:
+        for child in view.children:
+            child.disabled = True
+        await voting_message.edit(view=view)
+
+    # Tally votes
+    if not hasattr(voting_message, 'view') or voting_message.view is None:
+        # Defensive fallback: re-create or skip
+        await channel.send("⚠️ Could not tally votes — no view found.")
+        return
+
+    # Use the stored vote counts from VotingView
+    vote_counts = voting_message.view.vote_counts
+
+    if not vote_counts:
+        await channel.send("⚠️ No votes were cast today.")
+        voting_message = None
+        return
+
+    max_votes = max(vote_counts.values())
+    winners = [uid for uid, count in vote_counts.items() if count == max_votes]
+
+    if max_votes == 0:
+        await channel.send("No votes received today.")
+        voting_message = None
+        return
+
+    # Award 1 insight point to each winner
+    scores = load_scores()
+    for winner_uid in winners:
+        uid = str(winner_uid)
+        scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
+        scores[uid]["insight_points"] += 1
+
+    save_scores(scores)
+
+    winner_mentions = ", ".join(f"<@{uid}>" for uid in winners)
+    await channel.send(f"🏆 Voting ended! Congratulations to the winner(s): {winner_mentions} with {max_votes} vote(s)! +1 insight point awarded.")
+
+    # Reset voting state
+    voting_message = None
 
 @client.event
 async def on_message(msg):
