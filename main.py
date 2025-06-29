@@ -244,7 +244,7 @@ async def close_submissions():
     global submission_open
     submission_open = False
     channel = client.get_channel(CHANNEL_ID)
-    await channel.send("🚫 Submissions are now closed for today's question. Thank you!")
+    await channel.send("🔒 Submissions are now closed for today's question. Voting will begin in 5 minutes Thank you!")
 @tasks.loop(time=time(hour=17, minute=5))
 async def start_voting():
     global voting_message, submission_open
@@ -660,7 +660,7 @@ async def start_test_sequence(interaction: discord.Interaction):
     await asyncio.sleep(10)
 
     submission_open = False
-    await channel.send("🚫 Submissions are now closed for today's question. Thank you!")
+    await channel.send("🔒 Submissions are now closed for today's question. Voting will begin in 5 minutes Thank you!")
     await asyncio.sleep(10)
 
     # Prepare answers for voting
