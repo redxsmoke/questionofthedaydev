@@ -8,6 +8,8 @@ import logging
 from datetime import time
 import os
 import asyncio
+NOTIFY_USER_ID = int(os.getenv('NOTIFY_USER_ID', 0))  # Fallback to 0 (invalid) if not set
+
 
 # --- Add VotingView and VoteButton classes here ---
 
@@ -138,7 +140,7 @@ async def post_question():
     )
 
     ch = client.get_channel(CHANNEL_ID)
-    await ch.send(f"@everyone {question}\n\n{submitter_text}", view=QuestionView(idx))
+    await ch.send(f"{question}\n\n{submitter_text}", view=QuestionView(idx))
     
 class QuestionView(View):
     def __init__(self, qid):
@@ -422,12 +424,13 @@ class SubmitModal(Modal, title="Submit a Question"):
 
             notify_msg = f"🧠 @{display_name} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
 
-            for member in guild.members:
-                if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
+            if NOTIFY_USER_ID:
+                notify_user = await client.fetch_user(NOTIFY_USER_ID)
+                if notify_user:
                     try:
-                        await member.send(notify_msg)
+                        await notify_user.send(notify_msg)
                     except Exception as e:
-                        print(f"⚠️ Could not DM {member}: {e}")
+                        print(f"⚠️ Could not DM NOTIFY_USER_ID: {e}")
 
         except Exception as e:
             print(f"❌ Error in SubmitModal.on_submit: {e}")
