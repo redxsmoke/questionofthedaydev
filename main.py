@@ -30,32 +30,32 @@ class VoteButton(Button):
         self.uid = uid
         self.parent = parent
 
-async def callback(self, interaction: discord.Interaction):
-    user_id = str(interaction.user.id)  # convert to string
-    parent = self.parent
+    async def callback(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        parent = self.parent
 
-    if user_id == str(self.uid):  # compare string to string
-        await interaction.response.send_message("❌ You cannot vote for your own answer.", ephemeral=True)
-        return
-
-    if user_id in parent.user_votes:
-        previous_vote = parent.user_votes[user_id]
-        if previous_vote == self.uid:
-            await interaction.response.send_message("You already voted for this answer.", ephemeral=True)
+        if user_id == str(self.uid):
+            await interaction.response.send_message("❌ You cannot vote for your own answer.", ephemeral=True)
             return
-        else:
-            parent.vote_counts[previous_vote] -= 1
 
-    parent.user_votes[user_id] = self.uid
-    parent.vote_counts[self.uid] += 1
+        if user_id in parent.user_votes:
+            previous_vote = parent.user_votes[user_id]
+            if previous_vote == self.uid:
+                await interaction.response.send_message("You already voted for this answer.", ephemeral=True)
+                return
+            else:
+                parent.vote_counts[previous_vote] -= 1
 
-    desc_lines = []
-    for idx, (uid, display_name, answer) in enumerate(parent.answers, start=1):
-        count = parent.vote_counts.get(uid, 0)
-        desc_lines.append(f"Answer #{idx} ({display_name}): {answer} — {count} vote{'s' if count != 1 else ''}")
+        parent.user_votes[user_id] = self.uid
+        parent.vote_counts[self.uid] += 1
 
-    vote_summary = "\n".join(desc_lines)
-    await interaction.response.edit_message(content=f"Current votes:\n{vote_summary}", view=parent)
+        desc_lines = []
+        for idx, (uid, display_name, answer) in enumerate(parent.answers, start=1):
+            count = parent.vote_counts.get(uid, 0)
+            desc_lines.append(f"Answer #{idx} ({display_name}): {answer} — {count} vote{'s' if count != 1 else ''}")
+
+        vote_summary = "\n".join(desc_lines)
+        await interaction.response.edit_message(content=f"Current votes:\n{vote_summary}", view=parent)
 
 
 logging.basicConfig(level=logging.INFO)
