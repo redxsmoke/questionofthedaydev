@@ -420,15 +420,74 @@ class SubmitModal(Modal, title="Submit a Question"):
 async def submit_question(interaction):
     await interaction.response.send_modal(SubmitModal(interaction.user))
 
+class QuestionListView(View):
+    def __init__(self, questions, page=0):
+        super().__init__(timeout=180)
+        self.questions = questions
+        self.page = page
+        self.per_page = 10
+        self.max_page = (len(self.questions) - 1) // self.per_page
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.clear_items()
+
+        prev = Button(label="Previous", style=discord.ButtonStyle.secondary, disabled=self.page == 0)
+        next = Button(label="Next", style=discord.ButtonStyle.secondary, disabled=self.page == self.max_page)
+
+        async def prev_callback(interaction):
+            self.page -= 1
+            await self.update_message(interaction)
+
+        async def next_callback(interaction):
+            self.page += 1
+            await self.update_message(interaction)
+
+        prev.callback = prev_callback
+        next.callback = next_callback
+
+        self.add_item(prev)
+        self.add_item(next)
+
+    async def update_message(self, interaction):
+        start = self.page * self.per_page
+        end = start + self.per_page
+        current = self.questions[start:end]
+
+current = self.questions[start:end]
+
+embed = discord.Embed(
+    title="📋 Question List",
+    description="\n".join(
+        f"`{q['id']}`: {q['question']} — submitted by <@{q['submitter']}>" if q.get("submitter") else f"`{q['id']}`: {q['question']}"
+        for q in current
+    ),
+    color=discord.Color.blue()
+)
+
+
+        embed.set_footer(text=f"Page {self.page + 1} of {self.max_page + 1}")
+
+        self.update_buttons()
+        await interaction.response.edit_message(embed=embed, view=self)
+
 @tree.command(name="questionlist", description="Admin-only: list questions")
-async def question_list(interaction):
+async def question_list(interaction: discord.Interaction):
     if not is_admin(interaction):
         return await interaction.response.send_message("❌ No permission.", ephemeral=True)
-    qs = load_questions()
-    if not qs:
-        return await interaction.response.send_message("⚠️ No questions.", ephemeral=True)
-    lines = [f"`{q['id']}`: {q['question']}" for q in qs]
-    await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+    questions = load_questions()
+    if not questions:
+        return await interaction.response.send_message("⚠️ No questions found.", ephemeral=True)
+
+    view = QuestionListView(questions)
+    embed = discord.Embed(
+        title="📋 Question List",
+        description="\n".join(f"`{q['id']}`: {q['question']}" for q in questions[:10]),
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text=f"Page 1 of {(len(questions) - 1) // 10 + 1}")
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @tree.command(name="removequestion", description="Admin-only: remove question")
 @app_commands.describe(question_id="ID to remove")
