@@ -31,12 +31,14 @@ class VoteButton(Button):
         self.parent = parent
 
     async def callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        parent = self.parent
+    user_id = str(interaction.user.id)  # convert to string
+    parent = self.parent
 
-        if user_id == self.uid:
-            await interaction.response.send_message("❌ You cannot vote for your own answer.", ephemeral=True)
-            return
+    if user_id == str(self.uid):  # compare string to string
+        await interaction.response.send_message("❌ You cannot vote for your own answer.", ephemeral=True)
+        return
+     
+
 
         if user_id in parent.user_votes:
             previous_vote = parent.user_votes[user_id]
@@ -253,23 +255,28 @@ async def close_submissions():
 async def start_voting():
     global voting_message, submission_open
 
-    # Make sure submissions are closed
     if submission_open:
         return  # Don’t start voting if submissions are still open
 
     channel = client.get_channel(CHANNEL_ID)
+    guild = client.get_guild(GUILD_ID)
 
-    # Prepare answers for voting: only non-anonymous answers
-    answers = [(uid, data["answer"]) for uid, data in answer_log.items() if not data["anonymous"]]
+    # Prepare answers for voting: include display name with user ID and answer
+    answers = []
+    for uid, data in answer_log.items():
+        if not data["anonymous"]:
+            member = guild.get_member(int(uid))
+            display_name = member.display_name if member else f"User {uid}"
+            answers.append((uid, display_name, data["answer"]))
+
     if not answers:
-        await channel.send("⚠️ No answers were submitted for voting today. Note - anonymous answers are not eligible to be voted on")
+        await channel.send("⚠️ No answers were submitted for voting today. Anonymous answers can't be voted on.")
         return
 
     view = VotingView(answers)
-    content_lines = [f"Vote for the best answer!"]
-
-    for idx, (uid, ans) in enumerate(answers, start=1):
-        content_lines.append(f"**Answer #{idx}:** {ans}")
+    content_lines = ["Vote for the best answer!"]
+    for idx, (uid, display_name, ans) in enumerate(answers, start=1):
+        content_lines.append(f"**Answer #{idx} ({display_name}):** {ans}")
 
     content = "\n".join(content_lines)
     voting_message = await channel.send(content, view=view)
