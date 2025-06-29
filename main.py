@@ -8,6 +8,54 @@ import logging
 from datetime import time
 import os
 
+# --- Add VotingView and VoteButton classes here ---
+
+class VotingView(View):
+    def __init__(self, answers):
+        super().__init__(timeout=None)
+        self.answers = answers
+        self.vote_counts = {uid: 0 for uid, _ in answers}
+        self.user_votes = {}
+
+        for idx, (uid, answer) in enumerate(answers):
+            label = f"Vote for answer #{idx+1}"
+            self.add_item(VoteButton(label=label, uid=uid, parent=self))
+
+class VoteButton(Button):
+    def __init__(self, label, uid, parent):
+        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        self.uid = uid
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        user_id = interaction.user.id
+        parent = self.parent
+
+        # Check if user already voted
+        if user_id in parent.user_votes:
+            previous_vote = parent.user_votes[user_id]
+            if previous_vote == self.uid:
+                await interaction.response.send_message("You have already voted for this answer.", ephemeral=True)
+                return
+            else:
+                # Remove previous vote count
+                parent.vote_counts[previous_vote] -= 1
+
+        # Register new vote
+        parent.user_votes[user_id] = self.uid
+        parent.vote_counts[self.uid] += 1
+
+        # Prepare vote counts display
+        desc_lines = []
+        for idx, (uid, answer) in enumerate(parent.answers, start=1):
+            count = parent.vote_counts.get(uid, 0)
+            desc_lines.append(f"Answer #{idx}: {answer} — {count} vote{'s' if count != 1 else ''}")
+
+        vote_summary = "\n".join(desc_lines)
+
+        # Update the message with the current vote counts
+        await interaction.response.edit_message(content=f"Current votes:\n{vote_summary}", view=parent)
+
 logging.basicConfig(level=logging.INFO)
 print("💡 main.py is running")
 
@@ -20,6 +68,11 @@ ADMIN_CHANNEL_ID = int(os.getenv('DISCORD_ADMIN_CHANNEL_ID', CHANNEL_ID))
 QUESTIONS_FILE = 'questions.json'
 SCORES_FILE = 'user_scores.json'
 START_DATE = datetime.date(2025, 6, 25)
+# --- Voting and submission tracking ---
+submission_open = True
+voting_message = None
+current_votes = {}
+answer_log = {}  # Stores answers by user: {user_id: {"answer": ..., "user": ..., "anonymous": bool}}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -80,58 +133,78 @@ async def post_question():
         if submitter else "🤖 Question by the Bot"
     )
 
-    class QuestionView(View):
-        def __init__(self, qid):
-            super().__init__(timeout=None)
-            self.qid = qid
-
-        @discord.ui.button(label="Answer Freely ⭐ (+1 Insight Point)", style=discord.ButtonStyle.primary)
-        async def freely(self, interaction, button):
-            await interaction.response.send_modal(AnswerModal(self.qid, interaction.user))
-
-        @discord.ui.button(label="Answer Anonymously 🔒 (0 Insight Points)", style=discord.ButtonStyle.secondary)
-        async def anon(self, interaction, button):
-            await interaction.response.send_modal(AnonModal(self.qid, interaction.user))
-
-    class AnswerModal(Modal, title="Answer the Question"):
-        answer = TextInput(label="Your answer", style=discord.TextStyle.paragraph)
-
-        def __init__(self, qid, user):
-            super().__init__()
-            self.qid = qid
-            self.user = user
-
-        async def on_submit(self, inter):
-            scores = load_scores()
-            uid = str(self.user.id)
-            scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
-            if self.qid not in scores[uid]["answered"]:
-                scores[uid]["insight_points"] += 1
-                scores[uid]["answered"].append(self.qid)
-                save_scores(scores)
-            total = scores[uid]["insight_points"] + scores[uid]["contribution_points"]
-            msg = (
-                f"📝 <@{uid}>: {self.answer}\n"
-                f"⭐ {scores[uid]['insight_points']} | 💡 {scores[uid]['contribution_points']} | 🏆 {get_rank(total)}"
-            )
-            await inter.response.send_message(msg)
-
-    class AnonModal(Modal, title="Answer Anonymously"):
-        answer = TextInput(label="Anonymous answer", style=discord.TextStyle.paragraph)
-
-        def __init__(self, qid, user):
-            super().__init__()
-            self.qid = qid
-            self.user = user
-
-        async def on_submit(self, inter):
-            admin_ch = client.get_channel(ADMIN_CHANNEL_ID)
-            await admin_ch.send(f"📩 Anonymous (QID {self.qid}): {self.answer}")
-            await inter.response.send_message("✅ Received anonymously.", ephemeral=True)
-
     ch = client.get_channel(CHANNEL_ID)
     await ch.send(f"@everyone {question}\n\n{submitter_text}", view=QuestionView(idx))
+    
+class QuestionView(View):
+    def __init__(self, qid):
+        super().__init__(timeout=None)
+        self.qid = qid
 
+    @discord.ui.button(label="Answer Freely ⭐ (+1 Insight Point)", style=discord.ButtonStyle.primary)
+    async def freely(self, interaction, button):
+        await interaction.response.send_modal(AnswerModal(self.qid, interaction.user))
+
+    @discord.ui.button(label="Answer Anonymously 🔒 (0 Insight Points)", style=discord.ButtonStyle.secondary)
+    async def anon(self, interaction, button):
+        await interaction.response.send_modal(AnonModal(self.qid, interaction.user))
+
+
+class AnswerModal(Modal, title="Answer the Question"):
+    answer = TextInput(label="Your answer", style=discord.TextStyle.paragraph)
+
+    def __init__(self, qid, user):
+        super().__init__()
+        self.qid = qid
+        self.user = user
+
+    async def on_submit(self, inter):
+        if not submission_open:
+            await inter.response.send_message("❌ Submissions are closed for today.", ephemeral=True)
+            return
+
+        scores = load_scores()
+        uid = str(self.user.id)
+        scores.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": []})
+        if self.qid not in scores[uid]["answered"]:
+            scores[uid]["insight_points"] += 1
+            scores[uid]["answered"].append(self.qid)
+            save_scores(scores)
+        total = scores[uid]["insight_points"] + scores[uid]["contribution_points"]
+        msg = (
+            f"📝 <@{uid}>: {self.answer.value}\n"
+            f"⭐ {scores[uid]['insight_points']} | 💡 {scores[uid]['contribution_points']} | 🏆 {get_rank(total)}"
+        )
+        await inter.response.send_message(msg)
+
+        answer_log[str(self.user.id)] = {
+            "answer": self.answer.value,
+            "user": self.user,
+            "anonymous": False
+        }
+
+class AnonModal(Modal, title="Answer Anonymously"):
+    answer = TextInput(label="Anonymous answer", style=discord.TextStyle.paragraph)
+
+    def __init__(self, qid, user):
+        super().__init__()
+        self.qid = qid
+        self.user = user
+
+    async def on_submit(self, inter):
+        if not submission_open:
+            await inter.response.send_message("❌ Submissions are closed for today.", ephemeral=True)
+            return
+
+        admin_ch = client.get_channel(ADMIN_CHANNEL_ID)
+        await admin_ch.send(f"📩 Anonymous (QID {self.qid}): {self.answer.value}")
+        await inter.response.send_message("✅ Received anonymously.", ephemeral=True)
+
+        answer_log[str(self.user.id)] = {
+            "answer": self.answer.value,
+            "user": self.user,
+            "anonymous": True
+        }
 @client.event
 async def on_ready():
     print("✅ Discord bot connected")
@@ -139,6 +212,8 @@ async def on_ready():
     purge_channel_before_post.start()
     notify_upcoming_question.start()
     post_daily_message.start()
+    submission_warning.start() 
+    close_submissions.start()
 
 @tasks.loop(time=time(hour=11, minute=50))
 async def purge_channel_before_post():
@@ -155,6 +230,19 @@ async def notify_upcoming_question():
 @tasks.loop(time=time(hour=12, minute=0))
 async def post_daily_message():
     await post_question()
+
+@tasks.loop(time=time(hour=16, minute=50))
+async def submission_warning():
+    channel = client.get_channel(CHANNEL_ID)
+    await channel.send("⏳ Submissions will close in 10 minutes! Get your answers in quickly!.")
+
+@tasks.loop(time=time(hour=17, minute=0))
+async def close_submissions():
+    global submission_open
+    submission_open = False
+    channel = client.get_channel(CHANNEL_ID)
+    await channel.send("🚫 Submissions are now closed for today's question. Thank you!")
+
 
 @client.event
 async def on_message(msg):
