@@ -211,8 +211,14 @@ class AnonModal(Modal, title="Answer Anonymously"):
         }
 @client.event
 async def on_ready():
-    print("✅ Discord bot connected")
-    await tree.sync()
+    print(f"✅ Logged in as {client.user} ({client.user.id})")
+    
+    try:
+        synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"✅ Synced {len(synced)} slash commands to guild {GUILD_ID}")
+    except Exception as e:
+        print(f"❌ Failed to sync commands: {e}")
+
     purge_channel_before_post.start()
     notify_upcoming_question.start()
     post_daily_message.start()
@@ -220,7 +226,6 @@ async def on_ready():
     close_submissions.start()
     start_voting.start()
     end_voting.start()
-    
 
 @tasks.loop(time=time(hour=11, minute=50))
 async def purge_channel_before_post():
@@ -391,39 +396,43 @@ class SubmitModal(Modal, title="Submit a Question"):
         self.user = user
 
     async def on_submit(self, inter):
-        qs = load_questions()
-        ids = [int(x["id"]) for x in qs if "id" in x]
-        nid = str(max(ids) + 1 if ids else 1)
-        qs.append({"id": nid, "question": self.q.value, "submitter": str(self.user.id)})
-        save_questions(qs)
+        try:
+            qs = load_questions()
+            ids = [int(x["id"]) for x in qs if "id" in x]
+            nid = str(max(ids) + 1 if ids else 1)
+            qs.append({"id": nid, "question": self.q.value, "submitter": str(self.user.id)})
+            save_questions(qs)
 
-        sc = load_scores()
-        uid = str(self.user.id)
-        today = str(datetime.date.today())
-        sc.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": [], "last_contrib": None})
-        if sc[uid]["last_contrib"] != today:
-            sc[uid]["contribution_points"] += 1
-            sc[uid]["last_contrib"] = today
-            save_scores(sc)
-            await inter.response.send_message(f"✅ Submitted! ID `{nid}` +1 contribution point", ephemeral=True)
-        else:
-            await inter.response.send_message(f"✅ Submitted! ID `{nid}` (already got today's point)", ephemeral=True)
+            sc = load_scores()
+            uid = str(self.user.id)
+            today = str(datetime.date.today())
+            sc.setdefault(uid, {"insight_points": 0, "contribution_points": 0, "answered": [], "last_contrib": None})
+            if sc[uid]["last_contrib"] != today:
+                sc[uid]["contribution_points"] += 1
+                sc[uid]["last_contrib"] = today
+                save_scores(sc)
+                await inter.response.send_message(f"✅ Submitted! ID `{nid}` +1 contribution point", ephemeral=True)
+            else:
+                await inter.response.send_message(f"✅ Submitted! ID `{nid}` (already got today's point)", ephemeral=True)
 
-        # --- Notify admins/mods here ---
-        # Fetch guild from interaction
-        guild = inter.guild
-        member = guild.get_member(self.user.id) if guild else None
-        display_name = member.display_name if member else f"{self.user.name}#{self.user.discriminator}"
+            # --- Notify admins/mods here ---
+            guild = inter.guild
+            member = guild.get_member(self.user.id) if guild else None
+            display_name = member.display_name if member else f"{self.user.name}#{self.user.discriminator}"
 
-        notify_msg = f"🧠 @{display_name} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
+            notify_msg = f"🧠 @{display_name} has submitted a new question. Use /listquestions to view the question and use /removequestion if moderation is needed."
 
-        # Then send to admins/mods DMs
-        for member in guild.members:
-            if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
-                try:
-                    await member.send(notify_msg)
-                except Exception as e:
-                    print(f"Could not DM {member}: {e}")
+            for member in guild.members:
+                if member.guild_permissions.administrator or member.guild_permissions.manage_messages:
+                    try:
+                        await member.send(notify_msg)
+                    except Exception as e:
+                        print(f"⚠️ Could not DM {member}: {e}")
+
+        except Exception as e:
+            print(f"❌ Error in SubmitModal.on_submit: {e}")
+            await inter.response.send_message("❌ Something went wrong while submitting your question.", ephemeral=True)
+
 
 @tree.command(name="submitquestion", description="Submit a question")
 async def submit_question(interaction):
